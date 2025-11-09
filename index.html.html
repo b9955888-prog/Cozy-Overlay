@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Cozy Reactive Overlay</title>
+<style>
+  :root{
+    --width:1920px;
+    --height:1080px;
+    --frame-radius:18px;
+    --soft: 18px;
+    --accent: #f6c3a6; /* warm peach */
+    --muted: #f3e9e1;
+    --shadow: 0 10px 30px rgba(10,10,10,0.15);
+    --glass: rgba(255,255,255,0.06);
+  }
+
+  html,body{
+    height:100%;
+    margin:0;
+    background: transparent;
+    -webkit-font-smoothing:antialiased;
+    -moz-osx-font-smoothing:grayscale;
+    font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+  }
+
+  /* Root overlay container — fixed size for Streamlabs */
+  .overlay {
+    width: var(--width);
+    height: var(--height);
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* subtle paper texture using gradients */
+  .bg {
+    position:absolute; inset:0;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02)),
+      repeating-linear-gradient(0deg, rgba(0,0,0,0.01) 0 1px, transparent 1px 4px);
+    pointer-events:none;
+    mix-blend-mode:normal;
+  }
+
+  /* Layout grid */
+  .stage {
+    position:absolute; inset:80px;
+    display:grid;
+    grid-template-columns: 1fr 420px;
+    grid-template-rows: 1fr 220px;
+    gap:24px;
+    align-items:stretch;
+  }
+
+  /* Game frame: transparent interior so game shows through */
+  .game-frame {
+    grid-column: 1 / 2;
+    grid-row: 1 / 3;
+    border-radius: calc(var(--frame-radius) + 6px);
+    padding: 18px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(4px);
+    position: relative;
+    overflow: visible;
+  }
+
+  .game-frame .frame-shell {
+    position:absolute; inset:18px;
+    border-radius: 12px;
+    box-shadow: inset 0 0 0 3px rgba(255,255,255,0.03);
+    pointer-events:none;
+  }
+
+  /* The actual "cutout" where the game shows — we keep it fully transparent */
+  .game-cutout {
+    position:absolute;
+    left: 42px; right: 42px; top: 42px; bottom: 42px;
+    border-radius: 10px;
+    pointer-events:none;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    outline: 6px solid rgba(255,255,255,0.02);
+    /* decorative inner vignette */
+    background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(0,0,0,0.01));
+  }
+
+  /* Chat frame */
+  .chat-frame {
+    grid-column: 2 / 3;
+    grid-row: 1 / 2;
+    border-radius: var(--frame-radius);
+    padding: 16px;
+    background: linear-gradient(180deg, rgba(255,247,242,0.6), rgba(241,230,224,0.12));
+    box-shadow: var(--shadow);
+    display:flex;
+    flex-direction: column;
+    gap:12px;
+    align-items:stretch;
+  }
+
+  .chat-title {
+    font-weight:600;
+    font-size:20px;
+    color:#6b4639;
+    letter-spacing:0.2px;
+  }
+
+  .chat-box {
+    flex:1;
+    border-radius:10px;
+    overflow:hidden;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.03);
+    position:relative;
+  }
+
+  /* Vtuber frame */
+  .vtuber-frame {
+    grid-column: 2 / 3;
+    grid-row: 2 / 3;
+    border-radius: var(--frame-radius);
+    padding: 12px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(0,0,0,0.06));
+    box-shadow: var(--shadow);
+    display:flex;
+    gap:12px;
+    align-items:center;
+  }
+
+  .vtuber-cutout {
+    width:100%;
+    height:100%;
+    min-height:180px;
+    border-radius:10px;
+    border: 2px dashed rgba(255,255,255,0.03);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    color:rgba(255,255,255,0.6);
+    font-size:14px;
+    pointer-events:none;
+    position:relative;
+  }
+
+  /* Cozy decorations */
+  .decor {
+    position:absolute;
+    right:36px;
+    bottom:36px;
+    display:flex;
+    gap:12px;
+    align-items:center;
+    pointer-events:none;
+  }
+
+  .candle {
+    width:42px; height:72px; border-radius:8px;
+    background: linear-gradient(180deg,#f6e7d9,#f2d6c1);
+    box-shadow: 0 6px 14px rgba(0,0,0,0.18);
+    position:relative;
+    display:flex; align-items:flex-start; justify-content:center;
+  }
+  .flame {
+    position:absolute; top:6px; width:10px; height:18px; border-radius:50%;
+    background: radial-gradient(circle at 30% 30%, #fff7c2, #ffc26a 40%, #ff7a2d 100%);
+    filter: blur(0.6px);
+    transform-origin: center bottom;
+    animation: flicker 2.2s infinite ease-in-out;
+    opacity:0.95;
+  }
+  @keyframes flicker{
+    0%{ transform: translateY(0) scaleY(1) rotate(-2deg); }
+    25%{ transform: translateY(-2px) scaleY(1.02) rotate(2deg); }
+    50%{ transform: translateY(0) scaleY(0.98) rotate(-1deg); }
+    75%{ transform: translateY(-1px) scaleY(1.01) rotate(1deg); }
+    100%{ transform: translateY(0) scaleY(1) rotate(-2deg); }
+  }
+
+  /* Reactive pulse for alerts */
+  .alert-pulse {
+    position:absolute;
+    left:50%; top:16%;
+    transform:translateX(-50%) translateY(-50%) scale(0.9);
+    pointer-events:none;
+    z-index:1200;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    opacity:0;
+  }
+  .alert-bubble {
+    background: linear-gradient(180deg, var(--accent), #ffd7c9);
+    color:#5b2a17;
+    padding:14px 20px;
+    border-radius:999px;
+    font-weight:700;
+    box-shadow: 0 10px 30px rgba(233,120,83,0.12);
+    transform-origin:center;
+  }
+  .pulse-animate {
+    animation: pop 700ms cubic-bezier(.2,.9,.2,1);
+  }
+  @keyframes pop {
+    0%{ opacity:0; transform:translateX(-50%) translateY(-50%) scale(0.8); }
+    20%{ opacity:1; transform:translateX(-50%) translateY(-50%) scale(1.07); }
+    60%{ transform:translateX(-50%) translateY(-50%) scale(0.98); }
+    100%{ opacity:0; transform:translateX(-50%) translateY(-50%) scale(0.96); }
+  }
+
+  /* small responsive scale down if the browser source is smaller */
+  @media (max-width:1600px){
+    .overlay{ transform: scale(0.85); transform-origin: top left; }
+  }
+
+  /* Debugging helpers — hidden in production */
+  .dev-controls {
+    position:absolute; left:18px; top:18px; z-index:2000;
+    display:flex; gap:8px;
+  }
+  .dev-controls button{
+    background: rgba(255,255,255,0.06);
+    color:#fff; border:0; padding:8px 10px; border-radius:8px; cursor:pointer;
+    backdrop-filter: blur(2px);
+  }
+
+</style>
+</head>
+<body>
+  <div class="overlay" id="overlay">
+    <div class="bg"></div>
+
+    <div class="stage">
+      <div class="game-frame" id="gameFrame" aria-hidden="true">
+        <div class="frame-shell"></div>
+        <!-- Transparent cutout: the game capture in Streamlabs should sit BELOW this Browser Source so it shows through -->
+        <div class="game-cutout"></div>
+      </div>
+
+      <div class="chat-frame">
+        <div class="chat-title">Chat</div>
+        <div class="chat-box" id="chatBox">
+          <!-- Example: embed your Twitch chat iframe or a chat widget here -->
+          <!-- For local testing we show placeholder text -->
+          <div style="padding:12px; color:#3e2b24; font-size:13px; opacity:0.95;">
+            <strong>Chat placeholder</strong><br>
+            Use your chat widget iframe or third-party chat embed inside .chat-box
+          </div>
+        </div>
+      </div>
+
+      <div class="vtuber-frame">
+        <div class="vtuber-cutout">
+          VTuber area — capture using Window Capture or Virtual Camera
+        </div>
+      </div>
+    </div>
+
+    <div class="decor" aria-hidden="true">
+      <div style="text-align:right; font-size:13px; color:rgba(255,255,255,0.6); pointer-events:none;">
+        <div style="font-weight:600">Cozy Stream</div>
+        <div style="opacity:0.8; font-size:12px">Good vibes only ☕️</div>
+      </div>
+      <div class="candle" aria-hidden="true">
+        <div class="flame"></div>
+      </div>
+    </div>
+
+    <!-- Alert bubble -->
+    <div class="alert-pulse" id="alertPulse" aria-hidden="true">
+      <div class="alert-bubble" id="alertText">New Follower!</div>
+    </div>
+
+    <!-- dev controls for local testing (remove or hide in production) -->
+    <div class="dev-controls" aria-hidden="true">
+      <button id="testFollow">Test Follow</button>
+      <button id="testSub">Test Donation</button>
+      <button id="toggleFlame">Toggle Flicker</button>
+    </div>
+  </div>
+
+<script>
+  // Small helper for alert pulse
+  const alertPulse = document.getElementById('alertPulse');
+  const alertText = document.getElementById('alertText');
+  const testFollow = document.getElementById('testFollow');
+  const testSub = document.getElementById('testSub');
+  const toggleFlame = document.getElementById('toggleFlame');
+  const flame = document.querySelector('.flame');
+
+  function showAlert(text = 'New Follower!'){
+    alertText.textContent = text;
+    alertPulse.style.opacity = 1;
+    alertPulse.classList.remove('pulse-animate');
+    // force reflow
+    void alertPulse.offsetWidth;
+    alertPulse.classList.add('pulse-animate');
+    setTimeout(()=> {
+      alertPulse.style.opacity = 0;
+    }, 1100);
+  }
+
+  testFollow.addEventListener('click', ()=> showAlert('New Follower!'));
+  testSub.addEventListener('click', ()=> showAlert('Donation! 💖'));
+
+  // Toggle flame flicker
+  let flicker = true;
+  toggleFlame.addEventListener('click', ()=>{
+    flicker = !flicker;
+    flame.style.animationPlayState = flicker ? 'running' : 'paused';
+    toggleFlame.textContent = flicker ? 'Toggle Flicker' : 'Flicker Off';
+  });
+
+  // EXAMPLE: hooking up real events (left as comments)
+  // To hook with Streamlabs events, you would use the Streamlabs socket API or your own websocket
+  // Example pattern:
+  //
+  // const socket = new WebSocket('wss://sockets.streamlabs.com?token=YOUR_TOKEN');
+  // socket.onmessage = e => {
+  //   const d = JSON.parse(e.data);
+  //   if(d.type === 'event' && d.for === 'donation'){
+  //     showAlert('Donation — ' + d.message);
+  //   }
+  // }
+
+  // Make sure the page background stays transparent for Streamlabs:
+  document.documentElement.style.background = 'transparent';
+  document.body.style.background = 'transparent';
+</script>
+</body>
+</html>
